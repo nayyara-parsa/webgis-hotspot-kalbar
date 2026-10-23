@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WebGIS Hotspot Kalimantan Barat</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<style>
+  :root { --bg:#fff; --fg:#1d2330; --mut:#667085; --line:#e4e7ec; --card:#f8f9fb; --acc:#c2410c; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14171f; --fg:#e8eaf0; --mut:#98a2b3; --line:#2a2f3b; --card:#1b1f2a; --acc:#fb923c; } }
+  * { box-sizing:border-box; }
+  html,body { height:100%; margin:0; font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; background:var(--bg); color:var(--fg); }
+  header { padding:10px 16px; border-bottom:1px solid var(--line); display:flex; gap:12px; align-items:baseline; flex-wrap:wrap; }
+  header h1 { font-size:16px; margin:0; } header span { color:var(--mut); font-size:12px; }
+  main { display:flex; height:calc(100% - 49px); }
+  #map { flex:1; min-width:0; }
+  aside { width:400px; max-width:45%; overflow-y:auto; border-left:1px solid var(--line); padding:12px; }
+  .tabs { display:flex; gap:4px; margin-bottom:10px; }
+  .tabs button { flex:1; padding:6px; border:1px solid var(--line); background:var(--card); color:var(--fg); border-radius:6px; cursor:pointer; }
+  .tabs button.on { background:var(--acc); color:#fff; border-color:var(--acc); }
+  .tab { display:none; } .tab.on { display:block; }
+  label { display:block; font-size:12px; color:var(--mut); margin:8px 0 3px; }
+  select { width:100%; padding:6px; background:var(--card); color:var(--fg); border:1px solid var(--line); border-radius:6px; }
+  .row { display:flex; gap:8px; } .row > div { flex:1; }
+  table { width:100%; border-collapse:collapse; font-size:12px; margin:6px 0 12px; }
+  th,td { padding:4px 6px; border-bottom:1px solid var(--line); text-align:left; } th { color:var(--mut); font-weight:600; }
+  tr.klik { cursor:pointer; } tr.klik:hover { background:var(--card); }
+  .note { font-size:12px; color:var(--mut); background:var(--card); border-radius:6px; padding:8px; margin:8px 0; }
+  h3 { font-size:13px; margin:14px 0 4px; }
+  .legend { background:var(--bg); color:var(--fg); padding:8px 10px; border-radius:6px; box-shadow:0 1px 4px rgba(0,0,0,.3); font-size:12px; line-height:1.6; }
+  .legend i { display:inline-block; width:14px; height:12px; margin-right:6px; vertical-align:middle; opacity:.85; }
+  .btn { padding:7px 10px; border:1px solid var(--line); background:var(--card); color:var(--fg); border-radius:6px; cursor:pointer; font:inherit; }
+  .btn.pri { background:var(--acc); color:#fff; border-color:var(--acc); font-weight:600; }
+  .btns { display:flex; gap:6px; margin:10px 0 4px; } .btns .btn { flex:1; }
+  .badge { display:inline-block; background:var(--card); border:1px solid var(--line); border-radius:99px; padding:2px 10px; font-size:12px; margin-top:6px; }
+  .cards { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:8px 0; }
+  .cards div { background:var(--card); border-radius:6px; padding:6px 8px; } .cards b { display:block; font-size:16px; } .cards span { font-size:11px; color:var(--mut); }
+  .cv { position:relative; height:220px; } .cv.tall { height:300px; }
+  .heat td { text-align:center; padding:2px 0; font-size:10px; border:1px solid var(--bg); } .heat th { font-size:10px; padding:2px; text-align:center; }
+  .heat tr.sel th:first-child { color:var(--acc); }
+  input[type=range] { width:100%; }
+  .coord { background:var(--bg); color:var(--fg); padding:2px 8px; font-size:11px; border-radius:4px; box-shadow:0 1px 3px rgba(0,0,0,.3); }
+  @media (max-width:800px) { main { flex-direction:column; } aside { width:100%; max-width:none; height:50%; border-left:0; border-top:1px solid var(--line); } #map { height:50%; flex:none; } }
+</style>
+</head>
+<body>
+<header><h1>WebGIS Hotspot Kalimantan Barat</h1><span>Wilayah prioritas pemantauan berbasis riwayat hotspot VIIRS 375 m</span></header>
+<main>
+  <div id="map"></div>
+  <aside>
+    <div class="tabs"><button class="on" data-t="peta">Peta</button><button data-t="grafik">Grafik</button><button data-t="metode">Metode &amp; Validasi</button></div>
+
+    <section id="peta" class="tab on">
+      <label for="lyr">Layer peta</label>
+      <select id="lyr">
+        <option value="k">Klaster Gi* (signifikansi)</option>
+        <option value="s">Skor prioritas (0–1)</option>
+        <option value="p">Persistensi (proporsi tahun ada hotspot)</option>
+        <option value="d">Intensitas (titik/100 km²/tahun)</option>
+        <option value="st">Stabilitas (uji bobot Monte Carlo)</option>
+        <option value="n">Jumlah hotspot (menurut rentang tahun)</option>
+      </select>
+      <div class="row"><div><label for="y0">Dari tahun</label><select id="y0"></select></div><div><label for="y1">Sampai tahun</label><select id="y1"></select></div></div>
+      <div class="btns"><button class="btn pri" id="apply">Terapkan periode</button><button class="btn" id="reset">Reset</button><button class="btn" id="play">▶ Putar</button></div>
+      <span class="badge" id="badge"></span>
+      <div class="note">Tekan <b>Terapkan</b> agar peta, tabel, dan grafik dihitung ulang (termasuk Gi*, skor, dan peringkat) untuk periode terpilih. Hanya layer <b>Stabilitas</b> yang tetap memakai seluruh periode.</div>
+      <label for="op">Transparansi grid</label><input type="range" id="op" min="0.1" max="1" step="0.05" value="0.75">
+      <label for="zk">Zoom ke kabupaten/kota</label><select id="zk"><option value="">Seluruh Kalimantan Barat</option></select>
+      <div class="btns"><button class="btn" id="csv">Unduh peringkat periode (CSV)</button></div>
+      <h3>10 sel dengan skor tertinggi</h3><div id="top"></div>
+      <h3 id="kabH" hidden>Per kabupaten/kota</h3><div id="kab"></div>
+    </section>
+
+    <section id="grafik" class="tab">
+      <div class="cards" id="cards"></div>
+      <h3>Hotspot per tahun &amp; rata-rata FRP</h3><div class="cv"><canvas id="cTh"></canvas></div>
+      <h3>Pola bulanan (periode terpilih)</h3><div class="cv"><canvas id="cBl"></canvas></div>
+      <h3>Peta panas tahun × bulan (skala log)</h3><div id="heat" class="heat"></div>
+      <h3>Hotspot per kabupaten/kota (periode terpilih)</h3><div class="cv tall"><canvas id="cKab"></canvas></div>
+      <h3>Tren per tahun</h3><select id="tk"></select><div class="cv"><canvas id="cTr"></canvas></div>
+      <h3>Siang vs malam (periode terpilih)</h3><div class="cv"><canvas id="cDn"></canvas></div>
+    </section>
+
+    <section id="metode" class="tab"><div id="met"></div></section>
+  </aside>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
